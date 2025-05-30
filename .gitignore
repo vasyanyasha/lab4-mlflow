@@ -1,0 +1,4 @@
+.dvc/
+__pycache__/
+.vscode/
+*.log

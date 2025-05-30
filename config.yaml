@@ -1,0 +1,17 @@
+data:
+  images_dir: "./data/images"
+  labels_dir: "./data/labels"
+  test_size: 0.1
+  val_size: 0.1
+  random_state: 42
+  batch_names_select: ["0", "1", "2", "3", "4", "5"]
+
+training:
+  lr: 0.001
+  num_epochs: 10
+  n_batches: 6
+
+dataloader:
+  batch_size: 32
+  shuffle: true
+  num_workers: 2

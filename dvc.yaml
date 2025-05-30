@@ -1,0 +1,22 @@
+stages:
+  download_data:
+    cmd: python download_data.py
+    deps:
+    - download_data.py
+    outs:
+    - data/images
+    - data/labels/imagelabels.mat
+  train:
+    cmd: python train.py
+    deps:
+    - data/images
+    - train.py
+    outs:
+    - model/model.pkl
+  evaluate:
+    cmd: python evaluate.py
+    deps:
+    - model/model.pkl
+    - evaluate.py
+    outs:
+    - results/evaluation_metrics.json
