@@ -10,7 +10,18 @@ from download_data import download_and_prepare_data
 from model import ResNet18
 from utils import create_data_loader, train_model, device
 
+import mlflow
+
 def train_pipeline(config, images_dir, train_df, val_df):
+    # логування параметрів
+    mlflow.log_params({
+        "learning_rate": config["training"]["lr"],
+        "batch_size": config["dataloader"]["batch_size"],
+        "num_epochs": config["training"]["num_epochs"],
+        "seed": config["data"]["random_state"]
+    })
+
+    # Далі все як раніше
     train_loader = create_data_loader(images_dir, train_df, config)
     val_loader = create_data_loader(images_dir, val_df, config)
 
@@ -24,17 +35,7 @@ def train_pipeline(config, images_dir, train_df, val_df):
         device=device
     )
 
+    # логування артефактів моделі
+    mlflow.pytorch.log_model(model, "model")
+
     return model, best_model_path
-
-def load_config(path="config.yaml"):
-    with open(path, "r") as f:
-        return yaml.safe_load(f)
-
-if __name__ == "__main__":
-    images_dir, train_df, val_df, _ = download_and_prepare_data(config)
-    model, _ = train_pipeline(config, images_dir, train_df, val_df)
-
-    # Save the trained model
-    os.makedirs("model", exist_ok=True)
-    with open("model/model.pkl", "wb") as f:
-        pickle.dump(model, f)

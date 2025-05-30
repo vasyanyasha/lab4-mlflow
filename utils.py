@@ -22,6 +22,7 @@ import torch.optim.lr_scheduler as lr_scheduler
 
 import scipy.io as sio
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import mlflow
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -319,48 +320,68 @@ def train_model(
     best_model_path: Path = Path()
 
     for epoch in range(num_epochs):
-        model.train()  # Set the model to training mode
+        model.train()
+        train_loss = 0.0
+        correct = 0
+        total = 0
+
         for batch_inputs, batch_targets in train_loader:
             batch_inputs, batch_targets = batch_inputs.to(device), batch_targets.to(device)
 
-            # Forward pass
-            outputs: torch.Tensor = model(batch_inputs)
-            loss: torch.Tensor = loss_function(outputs, batch_targets)
+            outputs = model(batch_inputs)
+            loss = loss_function(outputs, batch_targets)
 
-            # Backward pass and optimization
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
 
-        logging.info(f"Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.4f}")
+            train_loss += loss.item()
+            _, predicted = torch.max(outputs, 1)
+            correct += (predicted == batch_targets).sum().item()
+            total += batch_targets.size(0)
 
+        avg_train_loss = train_loss / len(train_loader)
+        train_accuracy = correct / total
 
-        # Validation step
-        model.eval()  # Set the model to evaluation mode
+        logging.info(f"Epoch {epoch+1}/{num_epochs}, Loss: {avg_train_loss:.4f}, Accuracy: {train_accuracy:.4f}")
+
+        # MLflow логування метрик для тренування
+        mlflow.log_metric("train_loss", avg_train_loss, step=epoch)
+        mlflow.log_metric("train_accuracy", train_accuracy, step=epoch)
+
+        # Validation
+        model.eval()
+        val_loss: float = 0.0
+        val_correct = 0
+        val_total = 0
 
         with torch.no_grad():
-
-            val_loss: float = 0.0
             for val_inputs, val_targets in val_loader:
-
                 val_inputs, val_targets = val_inputs.to(device), val_targets.to(device)
                 val_outputs: torch.Tensor = model(val_inputs)
+
                 val_loss += loss_function(val_outputs, val_targets).item()
+                _, val_preds = torch.max(val_outputs, 1)
+                val_correct += (val_preds == val_targets).sum().item()
+                val_total += val_targets.size(0)
 
-            val_loss /= len(val_loader)
-            logging.info(f"Epoch {epoch+1}/{num_epochs}, Validation Loss: {val_loss:.4f}")
+        avg_val_loss = val_loss / len(val_loader)
+        val_accuracy = val_correct / val_total
 
-            # Save the best model
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                best_model_path = save_path
-                torch.save(model.state_dict(), best_model_path)
+        logging.info(f"Epoch {epoch+1}/{num_epochs}, Validation Loss: {avg_val_loss:.4f}, Accuracy: {val_accuracy:.4f}")
 
-                logging.info(f"Best model saved with validation loss: {best_val_loss:.4f}")
+        # MLflow логування метрик валідації
+        mlflow.log_metric("val_loss", avg_val_loss, step=epoch)
+        mlflow.log_metric("val_accuracy", val_accuracy, step=epoch)
+
+        # Save best model
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
+            best_model_path = save_path
+            torch.save(model.state_dict(), best_model_path)
+            logging.info(f"Best model saved with validation loss: {best_val_loss:.4f}")
 
     logging.info("Training complete.")
-
     return best_model_path
 
 def test_model(
@@ -414,5 +435,10 @@ def test_model(
     logging.info(f"Precision: {precision:.4f}")
     logging.info(f"Recall: {recall:.4f}")
     logging.info(f"F1 Score: {f1:.4f}")
+    mlflow.log_metric("test_loss", test_loss)
+    mlflow.log_metric("test_accuracy", accuracy)
+    mlflow.log_metric("test_precision", precision)
+    mlflow.log_metric("test_recall", recall)
+    mlflow.log_metric("test_f1", f1)
 
     return test_loss
